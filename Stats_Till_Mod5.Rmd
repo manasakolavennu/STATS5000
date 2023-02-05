@@ -1,0 +1,1010 @@
+---
+title: "STAT_5000_Project"
+output:
+  pdf_document: default
+  word_document: default
+  html_document:
+    df_print: paged
+date: "2022-012-03"
+---
+
+```{r}
+library('tidyverse')
+#library('leaflet')
+library('ggplot2')
+library('ggridges')
+library('ggpubr')
+library(BSDA)
+```
+
+```{r}
+df_stat <- read_csv('~/Downloads/STAT 5000/STAT 5000 Project Related/stat_dataset_reduced.csv')
+head(df_stat)
+```
+
+```{r}
+names(df_stat)
+```
+
+
+
+# DATA PREPROCESSING
+
+```{r}
+df_stat <- as_tibble(df_stat)
+# deleting the below columns because of more number of missing values or if there are any duplicated or not so useful columns
+df_stat <- df_stat[-c(1,5,6,7,15,16,17,21,22,24,25, 31)]
+head(df_stat)
+```
+
+```{r}
+colSums(is.na(df_stat))
+```
+
+```{r}
+length(unique(df_stat$HUC))
+length(unique(df_stat$SITE_ID))
+# missing values can't be filled by using SITE_ID column, we will group by using HUC column 
+```
+
+
+## TP column
+
+```{r}
+x_TP <- df_stat %>% select(HUC,TP) %>% group_by(HUC) %>% summarize(value = mean(TP, na.rm = TRUE)) 
+sum(is.na(x_TP$value))
+head(x_TP)
+```
+
+```{r}
+sum(is.na(df_stat$TP))
+p <- 0
+for (each in c(is.na(df_stat$TP))) {
+  p <- p+1
+    if (each == TRUE) {
+      h <- x_TP[match(df_stat$HUC[p],x_TP$HUC),'value']
+      df_stat$TP[p] <- h[[1]]
+      }
+}
+sum(is.na(df_stat$TP))
+```
+
+## NO3 column
+
+```{r}
+x_NO3 <- df_stat %>% select(HUC,NO3) %>% group_by(HUC) %>% summarize(value = mean(NO3, na.rm = TRUE)) 
+sum(is.na(x_NO3$value))
+head(x_NO3)
+```
+
+```{r}
+sum(is.na(df_stat$NO3))
+p <- 0
+for (each in c(is.na(df_stat$NO3))) {
+  p <- p+1
+    if (each == TRUE) {
+      h <- x_NO3[match(df_stat$HUC[p],x_NO3$HUC),'value']
+      df_stat$NO3[p] <- h[[1]]
+      }
+}
+sum(is.na(df_stat$NO3))
+```
+
+## do column
+
+```{r}
+x_do <- df_stat %>% select(HUC,do) %>% group_by(HUC) %>% summarize(value = mean(do, na.rm = TRUE)) 
+sum(is.na(x_do$value))
+head(x_do)
+```
+
+```{r}
+sum(is.na(df_stat$do))
+p <- 0
+for (each in c(is.na(df_stat$do))) {
+  p <- p+1
+    if (each == TRUE) {
+      h <- x_do[match(df_stat$HUC[p],x_do$HUC),'value']
+      df_stat$do[p] <- h[[1]]
+      }
+}
+sum(is.na(df_stat$do))
+```
+
+## temp column
+
+```{r}
+x_temp <- df_stat %>% select(HUC,Temp) %>% group_by(HUC) %>% summarize(value = mean(Temp, na.rm = TRUE)) 
+sum(is.na(x_temp$value))
+head(x_temp)
+```
+
+```{r}
+sum(is.na(df_stat$Temp))
+p <- 0
+for (each in c(is.na(df_stat$Temp))) {
+  p <- p+1
+    if (each == TRUE) {
+      h <- x_temp[match(df_stat$HUC[p],x_temp$HUC),'value']
+      df_stat$Temp[p] <- h[[1]]
+      }
+}
+sum(is.na(df_stat$Temp))
+```
+
+
+
+# lat_dd column
+
+```{r}
+x_lat <- df_stat %>% select(SITE_ID,LAT_DD) %>% group_by(SITE_ID) %>% 
+  summarize(value = mean(LAT_DD, na.rm = TRUE)) 
+sum(is.na(x_lat$value))
+head(x_lat)
+```
+
+```{r}
+unique(df_stat$SITE_ID[is.na(df_stat$LAT_DD)]) # getting those site ids which have lat_dd values missing
+
+x_lat$SITE_ID[is.na(x_lat$value)] # # getting those site ids which have lat_dd values missing after grouping by SITE_ID
+
+# all the 117 missing values in both LAT_DD and LON_DD columns are of the following 5 site ids, so we will drop the 117 rows which have lat_dd, lon_dd as missing values as we can't predict them from SITE_ID 
+```
+
+```{r}
+#dropping those rows which have lat_dd and lon_dd as null values
+df_stat <- na.omit(df_stat)
+colSums(is.na(df_stat))
+```
+
+```{r}
+# calculating the percentage of intolerant species out of total species
+
+df_stat <- df_stat %>%
+  mutate(perc_intol_total = round(df_stat$NSINTOL/df_stat$NUMSPEC, digits = 3 )) 
+head(df_stat)
+```
+
+# VISUALIZATIONS
+
+```{r}
+# Does more temperature have any effect on the species
+
+
+ggplot(data = df_stat) + 
+  geom_point( mapping = aes(x = Temp, y = perc_intol_total), color = "red") + 
+  facet_wrap( ~ df_stat$HUCName, nrow = 4) +
+  labs(title = "EFFECT OF TEMPERATURE ON SPECIES BY HUC'S")
+```
+
+
+```{r}
+
+df_stat %>% ggplot(aes(x = LON_DD, y = LAT_DD, size = NO3, color = NO3)) +
+  geom_point() + coord_map() + scale_colour_viridis_c() +
+  labs(title = "Variations of NO3 values by location")
+
+
+```
+
+```{r}
+# create data table which counts genus observations by year
+
+library(tidyverse)
+yearly_pop_counts <- df_stat %>%
+  count(YEAR, GENUS, state)
+
+# graph data, grouped by state, and use facet_wraps to separate data by genus
+
+ggplot(data = yearly_pop_counts, mapping = aes(x = YEAR, y = n , color = GENUS)) +
+  geom_line() +
+  labs(title = "Observed Genera Through Time", x = "Year of Observation", y = "Number of Individuals") +
+  theme_bw() 
+ 
+```
+
+
+
+```{r}
+
+ggplot(data = df_stat) +
+  geom_bar(mapping = aes(x = ECOREGL3, fill = state)) +
+  labs(title = 'Level 3 ecological regions state wise')
+# 67,68,69,70 are the codes of ecological regions in our dataset
+```
+
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = Temp, y = do)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = 'Are temperature and dissolved oxygen related')
+```
+
+
+```{r}
+
+df_corr <- df_stat[c(11,12,13,14,15,16,20)]
+
+library(corrplot)
+
+corrplot(cor(df_corr),
+         method = "number",
+         type = "upper" # show only upper side
+)
+```
+
+
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = PHSTVL , y = COND)) +
+  geom_point() +
+  labs(title = 'any relation between conductivity and PH levels?')
+```
+
+
+```{r}
+## Chemicals concentration by time
+
+#Prepare Data
+#group data by year and HUCName
+#find yearly averages for each chemical concentration, respectively
+yearly_TP <- df_stat %>%
+  group_by(YEAR, HUCName) %>%
+  summarize(avg_TP = mean(TP)) 
+
+yearly_NO3 <- df_stat %>%
+  group_by(YEAR, HUCName) %>%
+  summarize(avg_NO3 = mean(NO3)) 
+
+yearly_do <- df_stat %>%
+  group_by(YEAR, HUCName) %>%
+  summarize(avg_do = mean(do)) 
+
+#Visualize Data
+#With respect to each separate chemical concentration
+ggplot(data = yearly_TP, mapping = aes(x = YEAR, group = HUCName)) + 
+  geom_line(mapping = aes(y = avg_TP)) +
+  facet_wrap(facets = vars(HUCName)) +
+  labs(title = "Observed Phosphorous Concentration Through Time", x = "Year of Observation", y = "Phosphorous Concentration")
+
+# do  
+ggplot(data = yearly_do, mapping = aes(x = YEAR, group = HUCName)) + 
+  geom_line(mapping = aes(y = avg_do)) +
+  facet_wrap(facets = vars(HUCName)) +
+  labs(title = "Observed Oxygen Concentration Through Time", x = "Year of Observation", y = "Oxygen Concentration")
+
+#NO3
+ggplot(data = yearly_NO3, mapping = aes(x = YEAR, group = HUCName)) + 
+  geom_line(mapping = aes(y = avg_NO3)) +
+  facet_wrap(facets = vars(HUCName)) +
+  labs(title = "Observed Nitrate Concentration Through Time", x = "Year of Observation", y = "Nitrate Concentration")
+
+#All 3 chemicals on one chart over time
+ggplot(data = yearly_NO3, mapping = aes(x = YEAR, group = HUCName)) + 
+  geom_line(mapping = aes(y = avg_NO3, color = "NO3")) +
+  geom_line(data = yearly_do, mapping = aes(y = avg_do, color = "do")) +
+  geom_line(data = yearly_TP, mapping = aes(y = avg_TP, color = "TP")) +
+  facet_wrap(facets = vars(HUCName)) +
+  labs(title = "Observed Chemical Concentrations Through Time", x = "Year of Observation", y = "Concentration")
+```
+
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = state, y = TP)) +
+  geom_boxplot() +
+  labs(title = 'Total phosphorus by states')
+```
+
+```{r}
+
+summary(df_stat$COND)
+df_stat_COND_Q1 <- summary(df_stat$COND)[2]
+df_stat_COND_Q1
+df_stat_COND_Q3 <- summary(df_stat$COND)[5]
+df_stat_COND_Q3
+
+df_stat_COND_IQR <- df_stat_COND_Q3 - df_stat_COND_Q1
+
+df_stat_COND_lower_bound <- df_stat_COND_Q1 - (1.5 * df_stat_COND_IQR)
+df_stat_COND_upper_bound <- df_stat_COND_Q3 + (1.5 * df_stat_COND_IQR)
+
+df_stat_COND_total_outliers <- sum(df_stat$COND > df_stat_COND_upper_bound ) + sum(df_stat$COND < df_stat_COND_lower_bound )
+
+df_stat_COND_total_outliers
+
+```
+```{r}
+
+summary(df_stat$TP)
+df_stat_TP_Q1 <- summary(df_stat$TP)[2]
+df_stat_TP_Q1
+df_stat_TP_Q3 <- summary(df_stat$TP)[5]
+df_stat_TP_Q3
+
+df_stat_TP_IQR <- df_stat_TP_Q3 - df_stat_TP_Q1
+
+df_stat_TP_lower_bound <- df_stat_TP_Q1 - (1.5 * df_stat_TP_IQR)
+df_stat_TP_upper_bound <- df_stat_TP_Q3 + (1.5 * df_stat_TP_IQR)
+
+df_stat_TP_total_outliers <- sum(df_stat$TP > df_stat_TP_upper_bound ) + sum(df_stat$TP < df_stat_TP_lower_bound )
+
+df_stat_TP_total_outliers
+
+
+```
+
+```{r}
+# for dissolved oxygen column
+
+## Question 1
+
+mean(df_stat$do)
+median(df_stat$do)
+which.max(tabulate(df_stat$do)) # mode 
+range(df_stat$do) # outputs minimum and maximum value of the column
+diff(range(df_stat$do)) # outputs the difference between maximum and minimum value
+sd(df_stat$do)
+var(df_stat$do)
+quantile(df_stat$do)
+IQR(df_stat$do)
+```
+
+
+```{r}
+# histogram for dissolved oxygen column(Question 2)
+
+hist(df_stat$do, main="histogram for dissolved oxygen", xlab="do column values", col="darkmagenta")
+
+## observations - we can see that mode of the distribution is 8 as the histograms shows the highest frequency at that point and as mean and median are 7.87 and 7.89 respectively and so is the plot mainly distributed around those points and also we can see the minimum and maximum values near to 1 and 20 respectively as we can confirm it in the range values above.
+
+# Histogram using various bin sizes
+
+hist(df_stat$do, main="histogram for dissolved oxygen - 5 bins", xlab="do column values", col="darkmagenta", breaks = 5)
+
+hist(df_stat$do, main="histogram for dissolved oxygen - 10 bins", xlab="do column values", col="darkmagenta", breaks = 10)
+
+hist(df_stat$do, main="histogram for dissolved oxygen - 15 bins", xlab="do column values", col="darkmagenta", breaks = 15)
+
+## observations w.r.t bin sizes - we can see that in all the three plots the data is centered around 5-10 which is reasonable considering that our mean, median and mode are around 8 and the plots with 15 bins seems to give more better understanding of the points.
+```
+
+```{r}
+# Creating a box plot for dissolved oxygen column (Question 3)
+
+ggplot(data = df_stat, mapping = aes(x = do)) +
+  geom_boxplot() +
+  labs(title = 'Box plot for dissolved oxygen column', x = 'oxygen column values')
+
+## It seems there are outliers, not too much but in considerable amounts - we need to visualize those outliers and find the best way to deal with them
+```
+
+```{r}
+# calculating the no.of ouliers 
+sum(df_stat$do >= 13.45 | df_stat$do <= 2.28) 
+
+## We are deleting these 113 ouliers(just around 1 % of the dataset) - and deletion of outliers is done after plotting qqplot (question 5)
+```
+
+```{r}
+# Question 4 - Kernel density functions
+
+plot(density(df_stat$do, kernel = "rectangular"), main = "Rectangular KDE", xlab = "Dissolved oxygen")
+plot(density(df_stat$do, kernel = "triangular"), main = "Triangular KDE", xlab = "Dissolved Oxygen")
+
+
+#It seems that both the rectangular and the triangular kernels are a good fit for the data as we can see that both the KDE estimates are centered around the point 8 which is close to the mean, median and mode values. From the plots we can say that the values of the dissolved oxygen column are following approximately the normal distribution - there are some more values on the right tail of the curve than the left tail but that skewness shouldn't matter much.
+
+# coming to the comparision between these two kernels, they seem to be more or less the same, just that in rectangular plot you see more spikes here and there due to its nature of having 4 sides and in case of triangular - it upper part is cone shaped, so we won't see as many spikes as that of the rectangular one.
+```
+
+
+```{r}
+# Question 5 - QQplot
+
+qqnorm(df_stat$do, main = "Q-Q plot", ylab = "Dissolved Oxygen column")
+qqline(df_stat$do, distribution = qnorm)
+
+## Of the different choices of the qqplot the one using the distribution qnorm - checking whether our data is normally distributed or not by comaring quantiles of the data column with a data set which is normally distributed.
+
+## related to learnings from questions 1-4
+
+### The y-value in the graph related to the x-value of zero which is nothing but the 2nd quantile(median) is around 8 which is the near to the median we found in question 1 and most of the data seems to be centered(falling on the line) from x-values 5 to 10 which is plausible as we also seen in the Histogram that data is centered around the same range.
+
+## Coming to the boxplot and Density plots we have observed that there are outliers on both sides - but more number of outliers on the right side (in boxplot - more points on the right and in KDE - We can see that curve is just a bit skewed towards right - but very less skewness) - We can confirm this from qqplot below on left tail - points are just deviating from the line which shows that there are some outliers and on the right tail - we can see that points have mre deviation than that of the outliers in the left tail - Which confirms that there are more outliers on the right tail and the dissolved oxygen column values are very slightly skewed to the right
+```
+
+
+
+```{r}
+
+# deleting those outliers
+df_stat <- subset(df_stat, df_stat$do <= 13.45 & df_stat$do >= 2.28)
+
+```
+
+```{r}
+# checking if all the outliers were removed or not
+length(df_stat$do[df_stat$do >= 13.45 | df_stat$do <= 2.28])
+
+```
+```{r getMode_Func}
+
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+```
+
+
+
+```{r}
+## for TP column
+
+Qs <- quantile(df_stat$TP, prob=c(.25,.5,.75), type=1)
+Qs[1] - 1.5 * (Qs[3] - Qs[1])
+
+quantile(df_stat$TP)
+IQR(df_stat$TP)
+
+lower_bound_TP <- quantile(df_stat$TP)[2] - 1.5*IQR(df_stat$TP)
+lower_bound_TP
+
+upper_bound_TP <- quantile(df_stat$TP)[4] + 1.5*IQR(df_stat$TP)
+upper_bound_TP
+
+length(df_stat$TP[df_stat$TP > upper_bound_TP | df_stat$TP < lower_bound_TP])
+```
+
+```{r}
+
+df_stat <- subset(df_stat, df_stat$TP <= upper_bound_TP & df_stat$TP >= lower_bound_TP)
+
+```
+
+```{r}
+length(df_stat$TP[df_stat$TP >= upper_bound_TP | df_stat$TP <= lower_bound_TP])
+
+mean(df_stat$TP)
+median(df_stat$TP)
+getmode(df_stat$TP) # mode 
+(range <- max(df_stat$TP)- min(df_stat$TP)) # outputs the difference between maximum and minimum value
+sd(df_stat$TP)
+var(df_stat$TP)
+
+quantile(df_stat$TP)
+IQR(df_stat$TP)
+
+
+```
+
+
+```{r}
+
+# histogram for dissolved oxygen column(Question 2)
+
+hist(df_stat$TP, main="histogram for total phosphorus", xlab="TP column values", col="blue1")
+
+## observations - we can see that mode of the distribution is 5 as the histograms shows the highest frequency at that point and as mean and median are 19.29 and 16.11 respectively and so is the plot mainly distributed around those points and also we can see the minimum and maximum values near to 1 and 60 respectively as we can confirm it in the range values above.
+
+# Histogram using various bin sizes
+
+hist(df_stat$TP, main="histogram for total phosphorus - 5 bins", xlab="TP column values", col="blue1", breaks = 5)
+
+hist(df_stat$TP, main="histogram for total phosphorus - 20 bins", xlab="TP column values", col="blue1", breaks = 20)
+
+hist(df_stat$TP, main="histogram for total phosphorus - 50 bins", xlab="TP column values", col="blue1", breaks = 50)
+
+## observations w.r.t bin sizes - we can see that in all the three plots the data is spread over 0-20 which is reasonable considering that our mean, median and mode are around there and the plots with 50 bins seems to give more better understanding of the points.
+
+```
+```{r}
+# Creating a box plot for dissolved oxygen column (Question 3)
+
+ggplot(data = df_stat, mapping = aes(x = TP)) +
+  geom_boxplot() +
+  labs(title = 'Box plot for Total Phosphorous column', x = 'Phosporous column values')
+
+## It is clear that the outliers are eliminated from this column.
+```
+
+```{r}
+# Question 4 - Kernel density functions
+
+plot(density(df_stat$TP, kernel = "epanechnikov"), main = "Epanechnikov KDE", xlab = "Total Phosphorous")
+plot(density(df_stat$TP, kernel = "gaussian"), main = "Gaussian KDE", xlab = "Total Phosphorous")
+
+
+#It seems that both the epanechnikov and the gaussian kernels are reflecting that the data in Total phosphorous is a multi-modal data and highest peak is between 0-10 indicating the mode of data i.e., 5. And it is also clearly reflected that the column distribution is having skewness. Both the kernels are more or less reflecting similar distribution shapes.
+
+```
+
+```{r}
+# Question 5 - QQplot
+
+qqnorm(df_stat$TP, main = "Q-Q plot", ylab = "Total Phosphorous column")
+qqline(df_stat$TP, distribution = qnorm)
+
+## Of the different choices of the qqplot the one using the distribution qnorm - checking whether our data is normally distributed or not by comaring quantiles of the data column with a data set which is normally distributed.
+
+## related to learnings from questions 1-4
+
+### The y-value in the graph related to the x-value of zero which is nothing but the 2nd quantile(median) is around 8 which is the near to the median we found in question 1 and most of the data seems to be centered(falling on the line) from x-values 5 to 10 which is plausible as we also seen in the Histogram that data is centered around the same range.
+
+## Coming to the boxplot and Density plots we have observed that there are outliers on both sides - but more number of outliers on the right side (in boxplot - more points on the right and in KDE - We can see that curve is just a bit skewed towards right - but very less skewness) - We can confirm this from qqplot below on left tail - points are just deviating from the line which shows that there are some outliers and on the right tail - we can see that points have mre deviation than that of the outliers in the left tail - Which confirms that there are more outliers on the right tail and the dissolved oxygen column values are very slightly skewed to the right
+```
+
+
+```{r}
+
+## for COND column
+
+quantile(df_stat$COND)
+IQR(df_stat$COND)
+
+lower_bound_COND <- quantile(df_stat$COND)[2] - 1.5*IQR(df_stat$COND)
+lower_bound_COND
+
+upper_bound_COND <- quantile(df_stat$COND)[4] + 1.5*IQR(df_stat$COND)
+upper_bound_COND
+
+length(df_stat$COND[df_stat$COND > upper_bound_COND | df_stat$COND < lower_bound_COND])
+
+
+```
+```{r}
+
+df_stat <- subset(df_stat, df_stat$COND <= upper_bound_COND & df_stat$COND >= lower_bound_COND)
+
+```
+
+
+```{r}
+
+length(df_stat$COND[df_stat$COND > upper_bound_COND | df_stat$COND < lower_bound_COND])
+
+mean(df_stat$COND)
+median(df_stat$COND)
+getmode(df_stat$COND) # mode 
+(range <- max(df_stat$COND)- min(df_stat$COND)) # outputs the difference between maximum and minimum value
+sd(df_stat$COND)
+var(df_stat$COND)
+
+quantile(df_stat$COND)
+IQR(df_stat$COND)
+
+```
+
+```{r}
+
+# histogram for dissolved oxygen column(Question 2)
+
+hist(df_stat$COND, main="histogram for total conductivity", xlab="COND column values", col="blue3")
+
+## observations - we can see that mode of the distribution is 170 as the histograms shows the highest frequency at that point and as mean and median are 270.56 and 228.7 respectively and so is the plot mainly distributed around those points and also we can see the minimum and maximum values near to 10 and 870 respectively as we can confirm it in the range values above.
+
+# Histogram using various bin sizes
+
+hist(df_stat$COND, main="histogram for total conductivity - 5 bins", xlab="COND column values", col="blue3", breaks = 5)
+
+hist(df_stat$COND, main="histogram for total conductivity - 15 bins", xlab="COND column values", col="blue3", breaks = 15)
+
+hist(df_stat$COND, main="histogram for total conductivity - 100 bins", xlab="COND column values", col="blue3", breaks = 100)
+
+## observations w.r.t bin sizes - we can see that in all the three plots the data is spread over 100-300 which is reasonable considering that our mean, median and mode are around there and the plots with 100 bins seems to give more better understanding of the points.
+
+
+```
+
+```{r}
+
+# Creating a box plot for dissolved oxygen column (Question 3)
+
+ggplot(data = df_stat, mapping = aes(x = COND)) +
+  geom_boxplot() +
+  labs(title = 'Box plot for Total Conductivity column', x = 'Conductivity column values')
+
+## It seems there are outliers, not too much but in considerable amounts - we need to visualize those outliers and find the best way to deal with them
+```
+```{r}
+
+# Question 4 - Kernel density functions
+
+plot(density(df_stat$COND, kernel = "cosine"), main = "Cosine KDE", xlab = "Total Conductivity")
+plot(density(df_stat$COND, kernel = "gaussian"), main = "Gaussian KDE", xlab = "Total Conductivity")
+
+
+#It seems that both the cosine and the gaussian kernels are reflecting that the data in Total conductivity is a bi-modal data and highest peak is near 200 indicating the mode of data i.e., 170. And it is also clearly reflected that the column distribution is having skewness. Both the kernels are more or less reflecting similar distribution shapes. From the plots we can say that the values of the total conductivity column are following approximately the normal distribution - there are some more values on the right tail of the curve than the left tail but that skewness shouldn't matter much.
+
+
+```
+
+```{r}
+# Question 5 - QQplot
+
+qqnorm(df_stat$COND, main = "Q-Q plot", ylab = "Total Conductivity column")
+qqline(df_stat$COND, distribution = qnorm)
+
+## Of the different choices of the qqplot the one using the distribution qnorm - checking whether our data is normally distributed or not by comaring quantiles of the data column with a data set which is normally distributed.
+
+## related to learnings from questions 1-4
+
+### The y-value in the graph related to the x-value of zero which is nothing but the 2nd quantile(median) is around 200 which is the near to the median we found in question 1 and most of the data seems to be centered(falling on the line) from x-values 0 to 400 which is plausible as we also seen in the Histogram that data is centered around the same range.
+
+## Coming to the boxplot and Density plots we have observed that there are outliers on both sides - but more number of outliers on the right side (in boxplot - more points on the right and in KDE - We can see that curve is just a bit skewed towards right - but very less skewness) - We can confirm this from qqplot below on left tail - points are just deviating from the line which shows that there are some outliers and on the right tail - we can see that points have mre deviation than that of the outliers in the left tail - Which confirms that there are more outliers on the right tail and the dissolved oxygen column values are very slightly skewed to the right
+```
+
+
+```{r}
+
+## for PHSTVL column
+
+
+mean(df_stat$PHSTVL)
+median(df_stat$PHSTVL)
+getmode(df_stat$PHSTVL) # mode 
+(range <- max(df_stat$PHSTVL)- min(df_stat$PHSTVL)) # outputs the difference between maximum and minimum value
+sd(df_stat$PHSTVL)
+var(df_stat$PHSTVL)
+
+
+quantile(df_stat$PHSTVL)
+IQR(df_stat$PHSTVL)
+
+lower_bound_PHSTVL <- quantile(df_stat$PHSTVL)[2] - 1.5*IQR(df_stat$PHSTVL)
+lower_bound_PHSTVL
+
+upper_bound_PHSTVL <- quantile(df_stat$PHSTVL)[4] + 1.5*IQR(df_stat$PHSTVL)
+upper_bound_PHSTVL
+
+length(df_stat$PHSTVL[df_stat$PHSTVL > upper_bound_PHSTVL | df_stat$PHSTVL < lower_bound_PHSTVL])
+
+
+```
+```{r}
+
+# histogram for dissolved oxygen column(Question 2)
+
+hist(df_stat$PHSTVL, main="histogram for total pH", xlab="PHSTVL column values", col="blue3")
+
+## observations - we can see that mode of the distribution is 7 as the histograms shows the highest frequency at that point and as mean and median are 7.6 and 7.7 respectively and so is the plot mainly distributed around those points and also we can see the minimum and maximum values near to 6 and 8 respectively as we can confirm it in the range values above.
+
+# Histogram using various bin sizes
+
+hist(df_stat$PHSTVL, main="histogram for total pH - 5 bins", xlab="PHSTVL column values", col="blue3", breaks = 5)
+
+hist(df_stat$PHSTVL, main="histogram for total pH - 15 bins", xlab="PHSTVL column values", col="blue3", breaks = 15)
+
+hist(df_stat$PHSTVL, main="histogram for total pH - 100 bins", xlab="PHSTVL column values", col="blue3", breaks = 100)
+
+## observations w.r.t bin sizes - we can see that in all the three plots the data is spread over 6-8 which is reasonable considering that our mean, median and mode are around there and the plots with 100 bins seems to give more better understanding of the points.
+
+```
+
+```{r}
+
+
+# Creating a box plot for dissolved oxygen column (Question 3)
+
+ggplot(data = df_stat, mapping = aes(x = PHSTVL)) +
+  geom_boxplot() +
+  labs(title = 'Box plot for Total pH column', x = 'pH column values')
+
+## It seems there are outliers, not too much but in considerable amounts - we need to visualize those outliers and find the best way to deal with them
+
+```
+
+```{r}
+
+# Question 4 - Kernel density functions
+
+plot(density(df_stat$PHSTVL, kernel = "epanechnikov"), main = "Epanechnikov KDE", xlab = "Total pH")
+plot(density(df_stat$PHSTVL, kernel = "gaussian"), main = "Gaussian KDE", xlab = "Total pH")
+
+
+#It seems that both the epanechnikov and the gaussian kernels are a good fit for the data as we can see that both the KDE estimates are centered around the point 8 which is close to the mean, median and mode values. From the plots we can say that the values of the total pH column are following approximately the normal distribution - there are some more values on the left tail of the curve than the right tail but that skewness shouldn't matter much.
+
+
+
+
+```
+```{r}
+# Question 5 - QQplot
+
+qqnorm(df_stat$PHSTVL, main = "Q-Q plot", ylab = "Total Conductivity column")
+qqline(df_stat$PHSTVL, distribution = qnorm)
+
+## Of the different choices of the qqplot the one using the distribution qnorm - checking whether our data is normally distributed or not by comaring quantiles of the data column with a data set which is normally distributed.
+
+## related to learnings from questions 1-4
+
+### The y-value in the graph related to the x-value of zero which is nothing but the 2nd quantile(median) is around 7.7 which is the near to the median we found in question 1 and most of the data seems to be centered(falling on the line) from x-values 7 to 9 which is plausible as we also seen in the Histogram that data is centered around the same range.
+
+## Coming to the boxplot and Density plots we have observed that there are outliers on both sides - but more number of outliers on the left side (in boxplot - more points on the left and in KDE - We can see that curve is just a bit skewed towards left - but very less skewness) - We can confirm this from qqplot below on left tail - points are just deviating from the line which shows that there are some outliers and on the right tail - we can see that points have more deviation than that of the outliers in the left tail - Which confirms that there are more outliers on the left tail and the pH column values are very slightly skewed to the left
+```
+
+
+```{r}
+## For Temp column 
+
+mean(df_stat$Temp)
+median(df_stat$Temp)
+
+mode_temp <- getmode(df_stat$Temp)
+
+range<-max(df_stat$Temp) - min(df_stat$Temp)
+var(df_stat$Temp)
+sd(df_stat$Temp)
+quantile(df_stat$Temp,0.25)
+quantile(df_stat$Temp,0.75)
+IQR(df_stat$Temp)
+max(df_stat$Temp)
+min(df_stat$Temp)
+
+
+```
+```{r}
+
+hist(df_stat$Temp, breaks = 5)
+hist(df_stat$Temp, breaks = 10)
+hist(df_stat$Temp, breaks = 20)
+
+## We could see more data is concentrated between 15 to 30 and more concentration near 20 indicating the presence of mode, mean and median. More the number of bins, we are getting more clear picture of distribution of data.
+
+```
+
+```{r}
+boxplot(df_stat$Temp)
+
+## We can see there are outliers from the box plot which need to be eliminated from data.
+```
+
+```{r}
+
+n <- length(df_stat$Temp)
+x <- seq(from = min(df_stat$Temp) - 1, to = max(df_stat$Temp) + 1, length.out = 800)
+h <- 0.3
+gaussKDF <- function(x){1/sqrt(2*pi)*exp(-(x^2)/2)}
+UniformKDF <- function(x){dunif(x)}
+UKDF <- UniformKDF
+KDF<-gaussKDF
+Dist_around_xis <- sapply(df_stat$Temp, function(xi){(1/(h*n))*KDF((x - xi)/h)})
+plot(x, apply(Dist_around_xis, 1, sum), type = "l", ylab = "", lwd = 2)
+Dist_around_xis <- sapply(df_stat$Temp, function(xi){(1/(h*n))*UKDF((x - xi)/h)})
+plot(x, apply(Dist_around_xis, 1, sum), type = "l", ylab = "", lwd = 2)
+
+## We could see there are small spikes with the peak after 20 indicating the presence of mean value. And also due to presence of outliers, there is some skewness on the left side of distribution.
+
+```
+
+```{r}
+qqnorm(df_stat$Temp)
+qqline(df_stat$Temp, distribution = qnorm)
+
+## We could see more skewness on the left tail of distribution when compared with that of the right tile which is due to outlers.
+
+```
+
+```{r}
+
+quantile(df_stat$Temp,0.25)
+quantile(df_stat$Temp,0.75)
+IQR(df_stat$Temp)
+
+lower_bound_Temp <- quantile(df_stat$Temp,0.25) - 1.5*IQR(df_stat$Temp)
+lower_bound_Temp
+
+upper_bound_Temp <- quantile(df_stat$Temp,0.75) + 1.5*IQR(df_stat$Temp)
+upper_bound_Temp
+
+length(df_stat$Temp[df_stat$Temp > upper_bound_Temp | df_stat$Temp < lower_bound_Temp])
+
+```
+
+```{r}
+
+df_stat <- subset(df_stat, df_stat$Temp <= upper_bound_Temp & df_stat$Temp >= lower_bound_Temp)
+
+length(df_stat$Temp[df_stat$Temp > upper_bound_Temp | df_stat$Temp < lower_bound_Temp])
+
+```
+
+```{r}
+#Relative Probability Distribution
+#pH
+
+
+
+## Q-Q Plot
+qqnorm(df_stat$PHSTVL, col = "skyblue3", 
+       main = "pH Q-Q Plot")
+qqline(df_stat$PHSTVL, col = "red", lwd = 3)
+
+#ridgeline method
+ggplot(data=df_stat, aes(x=df_stat$PHSTVL, y=state, fill=state)) +
+  geom_density_ridges_gradient() +
+  ggtitle("pH Distribution by State") +
+  xlab("pH")
+
+#histogram and density line
+m <- mean(df_stat$PHSTVL)
+std <- sqrt(var(df_stat$PHSTVL))
+hist(df_stat$PHSTVL, col = "skyblue3", breaks = 30, prob = TRUE,
+     xlab = "pH Level",
+     main = "PH Relative Probability Distribution") 
+lines(density(df_stat$PHSTVL), col = "red", lwd = 2)
+curve(dnorm(x, mean = m, sd = std), col = "green", lwd = 2, add = TRUE, 
+      yaxt = "n")
+legend("topright",   
+       inset = 0.05,
+       legend = c("Density Curve", "Normal Curve"),
+       lty = 1,
+       col = c("red", "green"),
+       cex = .75)
+
+```
+```{r}
+data = c(df_stat[df_stat$state == 'KY','PHSTVL'])
+z.test(unlist(data), mu=mean(df_stat$PHSTVL), sigma.x=sd(df_stat$PHSTVL), conf.level=.95, alternative='two.sided')
+```
+
+```{r}
+huc <- df_stat %>% select(HUC) %>% group_by(HUC) %>% summarize(count = n())
+ecoRegion <- df_stat %>% select(ECOREGL3) %>% group_by(ECOREGL3) %>% summarize(count = n())
+chisq.test(ecoRegion$count)
+```
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = TP, y = perc_intol_total)) +
+  geom_point() +
+  geom_smooth(se = FALSE) + xlim(0,40)
+  labs(title = 'Is total phosphorus having an effect on species')
+```
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = NO3, y = perc_intol_total)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  xlim(0,500) +
+  labs(title = 'Is NO3 having an effect on species')
+```
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = Temp, y = perc_intol_total)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = 'Is temparature having an effect on species')
+```
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = do, y = perc_intol_total)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = 'Is dissolved oxygen having an effect on species')
+```
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = COND, y = perc_intol_total)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = 'Is conductivity having an effect on species')+
+  xlim(0,200)
+```
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = PHSTVL, y = perc_intol_total)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = 'Is pH having an effect on species')
+```
+
+```{r}
+ggplot(data = df_stat, mapping = aes(x = Temp, y = COND)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(title = 'temp vs conductivity')
+```
+
+```{r}
+#compare state ph to total ph
+#z-test, 2 tailed, alpha = 0.05
+
+#bc 2tailed, alpha = 0.025, zcrit = +/- 1.96
+
+# average/sd ph total population
+avg_ph = mean(df_stat$PHSTVL) #7.629925, n = 7882
+sdpop = sd(df_stat$PHSTVL) 
+
+# get values for ph mean by state
+t <- df_stat %>%
+  select(state, PHSTVL) %>%
+  group_by(state) %>%
+  summarise(count = n(), mean_ph = mean(PHSTVL, na.rm = TRUE))
+
+# KY, mu = 7.382158, n 3022
+#H0; mean KY = mean total
+ zky = (7.382158 - avg_ph)/(sdpop/sqrt(3022))
+ print(zky) #zky = -26.38
+#zky < zcrit, reject H0, kentucky ph significantly different from US ph
+ 
+
+# MD, mu = 7.495364, n = 151
+#H0; mean MD = mean total
+ zmd = (7.495364 - avg_ph)/(sdpop/sqrt(151))
+ print(zmd) #zmd =  -3.20
+#zmd < zcrit, reject H0, Maryland ph significantly different from US ph
+ 
+#NJ, mu = 7.630000, n = 9
+#H0; mean NJ = mean total
+ znj = (7.63 - avg_ph)/(sdpop/sqrt(9))
+ print(znj) 
+ #znj = 0.00
+#znj within zcrit range, fail to reject H0, New Jersey ph value is not significantly different as US ph value
+ 
+ #PA, mu = 7.608662, n = 770
+#H0; mean PA = mean total
+ zpa = (7.608662 - avg_ph)/(sdpop/sqrt(770))
+ print(zpa) #zpa = -1.14
+ #zpa within zcrit range, fail to reject H0, PA ph value is not significantly different as US ph value.
+
+ 
+#VA, mu = 7.91276, n = 768
+#H0; mean VA = mean total
+ zva = (7.91276 - avg_ph)/(sdpop/sqrt(768))
+ print(zva) #zva = 15.18
+#zva > zcrit, reject H0, virginia ph significantly different than us ph
+
+#WV, mu = 7.80963, n = 3162
+#H0; mean WV = mean total
+ zwv = (7.80963 - avg_ph)/(sdpop/sqrt(3162))
+ print(zwv) #zky = 19.57
+#zvw > zcrit, reject H0, WV ph significantly different than us ph
+
+
+```
+```{r}
+##quadratic regression using base R
+
+df_stat$PHSTVL2 <- df_stat$PHSTVL^2 #ph squared
+
+quadraticModel <- lm(perc_intol_total ~ PHSTVL + PHSTVL2, data=df_stat)
+
+summary(quadraticModel) #R^2 only 0.03135
+
+#plot model
+
+phValues <- seq(5,10,0.05)
+
+IntolPredict <- predict(quadraticModel, list(PHSTVL = phValues, PHSTVL2 = phValues^2))
+
+plot(df_stat$PHSTVL, df_stat$perc_intol_total, pch=16,col = "steelblue",
+     xlab = "pH", ylab = "Percent Intolerable", 
+     main = "Quadratic Model: pH vs Intolerability")
+lines(phValues, IntolPredict, col = 'red', lwd = 4)
+```
+
+```{r}
+#multi value nonlinear regression: GAM
+library(tidyverse)
+library(ggplot2)
+library(mgcv)
+mod_gam4 = gam(perc_intol_total ~ s(PHSTVL) + s(NO3) + s(TP) +s(COND) +s(do) 
+               +s(Temp), data = df_stat)
+summary(mod_gam4)
+
+```
+
+```{r}
+#ANOVA test 1
+df_Temp <- data.frame(df_stat$Temp, df_stat$HUCName)
+one.way1 <- aov(df_stat.Temp ~ df_stat.HUCName, data = df_Temp)
+summary(one.way1)
+```
+
+```{r}
+#ANOVA test 2
+df_NO3 <- data.frame(df_stat$NO3, df_stat$HUCName)
+one.way2 <- aov(df_stat.NO3 ~ df_stat.HUCName, data = df_NO3)
+summary(one.way2)
+```
