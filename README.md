@@ -1,7 +1,7 @@
-# STATS5000
-STATS 5000 - Endangered Fish in Freshwater
+# STAT 5000
+STAT 5000 - Endangered Fish in Freshwater
 
-STATS 5000-02 : Stat Methods and App I (Fall 2022) - Dr. Ami Gates
+STAT 5000-02 : Stat Methods and App I (Fall 2022) - Dr. Ami Gates
 
 Team
 Connor Flaherty - MS Applied Mathematics (Data Science) 
